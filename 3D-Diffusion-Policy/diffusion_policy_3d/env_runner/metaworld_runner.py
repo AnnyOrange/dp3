@@ -1,3 +1,9 @@
+import sys
+import os
+
+# 将项目路径添加到 sys.path
+project_path = "/home/xzj/project/origin-dp3/3D-Diffusion-Policy/3D-Diffusion-Policy"
+sys.path.append(project_path)
 import wandb
 import numpy as np
 import torch
@@ -66,6 +72,7 @@ class MetaworldRunner(BaseRunner):
         all_traj_rewards = []
         all_success_rates = []
         env = self.env
+        # print(self.n_action_steps)
 
         
         for episode_idx in tqdm.tqdm(range(self.eval_episodes), desc=f"Eval in Metaworld {self.task_name} Pointcloud Env", leave=False, mininterval=self.tqdm_interval_sec):
@@ -87,12 +94,12 @@ class MetaworldRunner(BaseRunner):
                     obs_dict_input = {}
                     obs_dict_input['point_cloud'] = obs_dict['point_cloud'].unsqueeze(0)
                     obs_dict_input['agent_pos'] = obs_dict['agent_pos'].unsqueeze(0)
-                    action_dict = policy.predict_action(obs_dict_input)
-
+                    action_dict = policy.predict_action_fast(obs_dict_input)
+                
                 np_action_dict = dict_apply(action_dict,
                                             lambda x: x.detach().to('cpu').numpy())
                 action = np_action_dict['action'].squeeze(0)
-
+                # print("action",action.shape)
                 obs, reward, done, info = env.step(action)
 
 

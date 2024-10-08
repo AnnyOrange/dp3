@@ -39,7 +39,7 @@ class Env(object):
     observation_space = None
 
     @abstractmethod
-    def step(self, action):
+    def step(self, action,green_act = None):
         """Run one timestep of the environment's dynamics. When end of
         episode is reached, you are responsible for calling `reset()`
         to reset this environment's state.
@@ -285,8 +285,9 @@ class Wrapper(Env):
     def metadata(self, value):
         self._metadata = value
 
-    def step(self, action):
-        return self.env.step(action)
+    def step(self, action,green_act = None):
+        import pdb;pdb.set_trace()
+        return self.env.step(action,green_act)
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)

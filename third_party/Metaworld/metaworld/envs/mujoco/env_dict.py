@@ -613,6 +613,7 @@ def create_observable_goal_envs():
         d = {}
 
         def initialize(env, seed=None):
+            print("seed",seed)
             if seed is not None:
                 st0 = np.random.get_state()
                 np.random.seed(seed)

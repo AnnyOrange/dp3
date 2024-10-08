@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
 import gym
 import numpy as np
 from termcolor import cprint
@@ -30,8 +32,14 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         self.step_count = 1
         return obs
     
-    def step(self, action):
-        result = super().step(action)
+    def step(self, action,green_act = None):
+        if green_act is None:
+            result = super().step(action)
+        else:
+            # import pdb;pdb.set_trace()
+            result = super().step(action,green_act)
+        # print(action.shape)
+        
         self.step_count += 1
         
         frame = self.env.render(mode=self.mode)

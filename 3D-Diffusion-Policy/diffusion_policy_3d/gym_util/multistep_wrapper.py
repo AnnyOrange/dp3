@@ -1,4 +1,7 @@
+import sys
+sys.path.append('/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
 import gym
+
 from gym import spaces
 import numpy as np
 import torch
@@ -134,15 +137,21 @@ class MultiStepWrapper(gym.Wrapper):
         obs = self._get_obs(self.n_obs_steps)
         return obs
 
-    def step(self, action):
+    def step(self, action,green_curve = None):
         """
         actions: (n_action_steps,) + action_shape
         """
+        # print("len(action)",len(action))
+        idx = 0
         for act in action:
+            if green_curve is not None:
+                green_act = green_curve[idx]
+            else:
+                green_act = None
             if len(self.done) > 0 and self.done[-1]:
                 # termination
                 break
-            observation, reward, done, info = super().step(act)
+            observation, reward, done, info = super().step(act,green_act)
 
             self.obs.append(observation)
             self.reward.append(reward)

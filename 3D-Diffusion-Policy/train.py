@@ -45,6 +45,7 @@ class TrainDP3Workspace:
         
         # set seed
         seed = cfg.training.seed
+        print(seed)
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
@@ -70,6 +71,7 @@ class TrainDP3Workspace:
 
     def run(self):
         cfg = copy.deepcopy(self.cfg)
+        # print(cfg)
         
         if cfg.training.debug:
             cfg.training.num_epochs = 100
@@ -99,6 +101,9 @@ class TrainDP3Workspace:
         # configure dataset
         dataset: BaseDataset
         dataset = hydra.utils.instantiate(cfg.task.dataset)
+        print(dataset)
+        print(**cfg.dataloader)
+        import pdb;pdb.set_trace()
 
         assert isinstance(dataset, BaseDataset), print(f"dataset must be BaseDataset, got {type(dataset)}")
         train_dataloader = DataLoader(dataset, **cfg.dataloader)
@@ -335,8 +340,13 @@ class TrainDP3Workspace:
 
     def eval(self):
         # load the latest checkpoint
-        
+        seed = self.cfg.training.seed
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        print(seed)
         cfg = copy.deepcopy(self.cfg)
+        print(cfg)
         
         lastest_ckpt_path = self.get_checkpoint_path(tag="latest")
         if lastest_ckpt_path.is_file():
@@ -345,9 +355,15 @@ class TrainDP3Workspace:
         
         # configure env
         env_runner: BaseRunner
+        print("_____________________self.output_dir_______________________________________",self.output_dir)
+        speedup = True
+        if speedup == True:
+            cfg.task.env_runner['_target_'] = 'diffusion_policy_3d.env_runner.metaworld_runner_speedup.MetaworldRunner'
+        
         env_runner = hydra.utils.instantiate(
             cfg.task.env_runner,
             output_dir=self.output_dir)
+        
         assert isinstance(env_runner, BaseRunner)
         policy = self.model
         if cfg.training.use_ema:

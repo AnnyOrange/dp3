@@ -173,6 +173,24 @@ class DP3(BasePolicy):
 
         return trajectory
 
+    def get_entropy(self, qpos, image, env_state=None, num_z_samples=10, num_a_samples_perz=1, actions=None, is_pad=None):
+        is_training = actions is not None
+        bs, _ = qpos.shape
+
+        # Step 1: 获取 trajectory (即 a_samples)
+        # 我们通过调用 conditional_sample 来获得动作采样
+        condition_data = torch.zeros(size=(bs, self.horizon, self.action_dim), device=qpos.device, dtype=qpos.dtype)
+        condition_mask = torch.zeros_like(condition_data, dtype=torch.bool)
+        
+        a_samples = self.conditional_sample(condition_data, condition_mask)
+        a_samples = a_samples.reshape(num_z_samples, bs, -1, self.action_dim)
+
+        # Step 2: 计算动作的熵，类似于 ACT 中的 KDE 方法
+        a_entropy, a_max_likelihood = KDE.kde_entropy(a_samples.reshape(num_a_samples_perz * num_z_samples, -1, self.action_dim).permute(1, 0, 2))
+        a_marginal_entropy = KDE.kde_marginal_action_entropy(a_samples.reshape(num_a_samples_perz * num_z_samples, -1, self.action_dim).permute(1, 0, 2))
+
+        return a_samples, a_entropy.reshape(bs, -1, 1), a_max_likelihood.reshape(bs, -1, self.action_dim)
+
 
     def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -232,6 +250,84 @@ class DP3(BasePolicy):
             local_cond=local_cond,
             global_cond=global_cond,
             **self.kwargs)
+        # print("nsample.shape",nsample.shape)
+        
+        # unnormalize prediction
+        naction_pred = nsample[...,:Da]
+        # print("Da",Da)
+        action_pred = self.normalizer['action'].unnormalize(naction_pred)
+
+        # get action
+        start = To - 1
+        end = start + self.n_action_steps
+        action = action_pred[:,start:end]
+        # print(action.shape)
+        # get prediction
+
+
+        result = {
+            'action': action,
+            'action_pred': action_pred,
+        }
+        
+        return result
+    def predict_action_fast(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        # normalize input
+        nobs = self.normalizer.normalize(obs_dict)
+        
+        if not self.use_pc_color:
+            nobs['point_cloud'] = nobs['point_cloud'][..., :3]
+        this_n_point_cloud = nobs['point_cloud']
+        
+        value = next(iter(nobs.values()))
+        B, To = value.shape[:2]
+        T = self.horizon
+        Da = self.action_dim
+        Do = self.obs_feature_dim
+        To = self.n_obs_steps
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_global_cond:
+            # condition through global feature
+            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            nobs_features = self.obs_encoder(this_nobs)
+            if "cross_attention" in self.condition_type:
+                # treat as a sequence
+                global_cond = nobs_features.reshape(B, self.n_obs_steps, -1)
+            else:
+                # reshape back to B, Do
+                global_cond = nobs_features.reshape(B, -1)
+            # empty data for action
+            cond_data = torch.zeros(size=(B, T, Da), device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        else:
+            # condition through impainting
+            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            nobs_features = self.obs_encoder(this_nobs)
+            # reshape back to B, T, Do
+            nobs_features = nobs_features.reshape(B, To, -1)
+            cond_data = torch.zeros(size=(B, T, Da+Do), device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs_features
+            cond_mask[:,:To,Da:] = True
+
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
         
         # unnormalize prediction
         naction_pred = nsample[...,:Da]
@@ -240,10 +336,9 @@ class DP3(BasePolicy):
         # get action
         start = To - 1
         end = start + self.n_action_steps
-        action = action_pred[:,start:end]
-        
-        # get prediction
 
+        # Modify here: Take every second action to achieve faster action prediction
+        action = action_pred[:,start:end:2]
 
         result = {
             'action': action,

@@ -1,12 +1,14 @@
 import abc
 import warnings
-
+import sys
+sys.path.append('/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
+import gym
 import glfw
 from gym import error
 from gym.utils import seeding
 import numpy as np
 from os import path
-import gym
+
 
 try:
     import mujoco_py
@@ -66,6 +68,7 @@ class MujocoEnv(gym.Env, abc.ABC):
         self.action_space.seed(seed)
         self.observation_space.seed(seed)
         self.goal_space.seed(seed)
+        print("seed",seed)
         return [seed]
 
     @abc.abstractmethod
@@ -85,7 +88,9 @@ class MujocoEnv(gym.Env, abc.ABC):
         pass
 
     @_assert_task_is_set
-    def reset(self):
+    def reset(self,seed = None):
+        if seed is not None:
+            self.seed(seed)
         self._did_see_sim_exception = False
         self.sim.reset()
         ob = self.reset_model()

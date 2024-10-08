@@ -111,8 +111,8 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
         self.mocap_low = np.hstack(mocap_low)
         self.mocap_high = np.hstack(mocap_high)
         self.curr_path_length = 0
-        self.seeded_rand_vec = False
-        self._freeze_rand_vec = True
+        self.seeded_rand_vec = True
+        self._freeze_rand_vec = False
         self._last_rand_vec = None
 
         # We use continuous goal space by default and
@@ -149,6 +149,7 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
         # doesn't seem to matter (it will only effect frame-stacking for the
         # very first observation)
         self._prev_obs = self._get_curr_obs_combined_no_goal()
+        self.target_pos = []
 
     def _set_task_inner(self):
         # Doesn't absorb "extra" kwargs, to ensure nothing's missed.
@@ -168,16 +169,24 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
         self._set_task_inner(**data)
         self.reset()
 
-    def set_xyz_action(self, action):
-        action = np.clip(action, -1, 1)
-        pos_delta = action * self.action_scale
-        new_mocap_pos = self.data.mocap_pos + pos_delta[None]
+    def set_xyz_action(self, action,green_act = None):
+        if green_act is None:
+            print("no")
+            action = np.clip(action, -1, 1)
+            pos_delta = action * self.action_scale
+            new_mocap_pos = self.data.mocap_pos + pos_delta[None]
 
-        new_mocap_pos[0, :] = np.clip(
-            new_mocap_pos[0, :],
-            self.mocap_low,
-            self.mocap_high,
-        )
+            new_mocap_pos[0, :] = np.clip(
+                new_mocap_pos[0, :],
+                self.mocap_low,
+                self.mocap_high,
+            )
+        else:
+            print("green_act")
+            new_mocap_pos=np.array([green_action])
+
+        self.target_pos.extend(new_mocap_pos[0])
+        
         self.data.set_mocap_pos('mocap', new_mocap_pos)
         self.data.set_mocap_quat('mocap', np.array([1, 0, 1, 0]))
 
@@ -403,8 +412,11 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
         )
 
     @_assert_task_is_set
-    def step(self, action):
-        self.set_xyz_action(action[:3])
+    def step(self, action,green_act = None):
+        if green_act is None:
+            self.set_xyz_action(action[:3])
+        else:
+            self.set_xyz_action(action[:3],green_act[:3])
         self.do_simulation([action[-1], -action[-1]])
         self.curr_path_length += 1
 
@@ -438,6 +450,7 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
             return self._last_stable_obs
 
         reward, info = self.evaluate_state(self._last_stable_obs, action)
+        info['target_pos'] = self.target_pos
         return self._last_stable_obs, reward, False, info
 
     def evaluate_state(self, obs, action):
