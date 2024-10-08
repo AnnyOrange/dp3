@@ -1,4 +1,5 @@
-
+## eval_policy
+same as usage
 
 # <a href="https://3d-diffusion-policy.github.io">3D Diffusion Policy</a>
 
