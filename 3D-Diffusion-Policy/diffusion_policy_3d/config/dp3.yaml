@@ -112,6 +112,7 @@ training:
   max_train_steps: null
   max_val_steps: null
   tqdm_interval_sec: 1.0
+  two_times: False
 
 logging:
   group: ${exp_name}

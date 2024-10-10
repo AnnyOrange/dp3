@@ -338,7 +338,17 @@ class DP3(BasePolicy):
         end = start + self.n_action_steps
 
         # Modify here: Take every second action to achieve faster action prediction
-        action = action_pred[:,start:end:2]
+        action = action_pred[:,start:end:] #(chunk_len, num_samples, dim)
+        # todo:每一个action都进行倍速，举个例子就是action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)
+        # 2x:
+        action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)
+        print(action[:,0,:].shape)
+        import pdb;
+        action_speed = action[:,0,:][-1]
+        # 3x:
+        # action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)+np.clip(action[:,2,:],-1,1)
+        # action_speed = action[:,0,:][-1]
+        action = action_speed
 
         result = {
             'action': action,

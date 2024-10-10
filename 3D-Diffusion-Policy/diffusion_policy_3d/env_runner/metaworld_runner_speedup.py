@@ -120,7 +120,7 @@ class MetaworldRunner(BaseRunner):
                     # print(obs_dict_input.shape)
                     # print(len(obs_dict_input['agent_pos']))
                     obs_array.extend(copy.deepcopy(obs_dict_input))
-                    action_dict = policy.predict_action(obs_dict_input)
+                    action_dict = policy.predict_action_fast(obs_dict_input)
                     # print(len(action_dict)
                 
                 np_action_dict = dict_apply(action_dict,

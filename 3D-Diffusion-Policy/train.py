@@ -100,10 +100,14 @@ class TrainDP3Workspace:
 
         # configure dataset
         dataset: BaseDataset
+        if cfg.training.two_times is True:
+            cfg.task.dataset['zarr_path'] = cfg.task.dataset['zarr_path'].replace('.zarr', '_2xspeeddemo.zarr')
+        print(cfg.task.dataset)
         dataset = hydra.utils.instantiate(cfg.task.dataset)
-        print(dataset)
-        print(**cfg.dataloader)
-        import pdb;pdb.set_trace()
+        # print(cfg.task.dataset)
+        # print(dataset)
+        # print(**cfg.dataloader)
+        # import pdb;pdb.set_trace()
 
         assert isinstance(dataset, BaseDataset), print(f"dataset must be BaseDataset, got {type(dataset)}")
         train_dataloader = DataLoader(dataset, **cfg.dataloader)
@@ -168,7 +172,7 @@ class TrainDP3Workspace:
             save_dir=os.path.join(self.output_dir, 'checkpoints'),
             **cfg.checkpoint.topk
         )
-
+        # import pdb;pdb.set_trace()
         # device transfer
         device = torch.device(cfg.training.device)
         self.model.to(device)
@@ -243,16 +247,16 @@ class TrainDP3Workspace:
                     if (cfg.training.max_train_steps is not None) \
                         and batch_idx >= (cfg.training.max_train_steps-1):
                         break
-
+            # import pdb;pdb.set_trace()
             # at the end of each epoch
             # replace train_loss with epoch average
             train_loss = np.mean(train_losses)
             step_log['train_loss'] = train_loss
 
             # ========= eval for this epoch ==========
-            policy = self.model
+            policy = self.model.to(device)
             if cfg.training.use_ema:
-                policy = self.ema_model
+                policy = self.ema_model.to(device)
             policy.eval()
 
             # run rollout

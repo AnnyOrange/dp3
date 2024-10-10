@@ -172,7 +172,7 @@ class SawyerXYZEnv(SawyerMocapBase, metaclass=abc.ABCMeta):
     def set_xyz_action(self, action,green_act = None):
         if green_act is None:
             print("no")
-            action = np.clip(action, -1, 1)
+            action = np.clip(action, -2, 2)
             pos_delta = action * self.action_scale
             new_mocap_pos = self.data.mocap_pos + pos_delta[None]
 
