@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
+sys.path.insert(0, '/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
 import gym
-
+print(gym.__file__)
 from gym import spaces
 import numpy as np
 import torch
@@ -162,17 +162,34 @@ class MultiStepWrapper(gym.Wrapper):
             self.done.append(done)
             self._add_info(info)
 
-        observation = self._get_obs(self.n_obs_steps)
+        # observation = self._get_obs(self.n_obs_steps)
+        observation = self._get_obs(n_steps=self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
         done = aggregate(self.done, 'max')
         info = dict_take_last_n(self.info, self.n_obs_steps)
         return observation, reward, done, info
 
-    def _get_obs(self, n_steps=1):
+    def _get_obs(self, n_steps=1, repeat_single_step=False):
         """
-        Output (n_steps,) + obs_shape
+        Output (n_steps,) + obs_shape or repeat single step observation
         """
         assert(len(self.obs) > 0)
+        
+        # 如果选择重复单步观察而不是堆叠多个观察
+        if repeat_single_step:
+            if isinstance(self.observation_space, spaces.Box):
+                single_obs = self.obs[-1]  # 取最新的单步观测
+                return np.repeat(single_obs[np.newaxis, ...], n_steps, axis=0)  # 重复 n_steps 次
+            elif isinstance(self.observation_space, spaces.Dict):
+                result = dict()
+                for key in self.observation_space.keys():
+                    single_obs = self.obs[-1][key]
+                    result[key] = np.repeat(single_obs[np.newaxis, ...], n_steps, axis=0)
+                return result
+            else:
+                raise RuntimeError('Unsupported space type')
+        
+        # 正常堆叠多步观察（历史堆叠模式）
         if isinstance(self.observation_space, spaces.Box):
             return stack_last_n_obs(self.obs, n_steps)
         elif isinstance(self.observation_space, spaces.Dict):
@@ -185,6 +202,7 @@ class MultiStepWrapper(gym.Wrapper):
             return result
         else:
             raise RuntimeError('Unsupported space type')
+
 
     def _add_info(self, info):
         for key, value in info.items():

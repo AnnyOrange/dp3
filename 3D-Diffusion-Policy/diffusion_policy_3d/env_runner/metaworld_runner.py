@@ -40,7 +40,7 @@ class MetaworldRunner(BaseRunner):
                  ):
         super().__init__(output_dir)
         self.task_name = task_name
-
+        print("device---------------------",device)
 
         def env_fn(task_name):
             return MultiStepWrapper(

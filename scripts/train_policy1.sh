@@ -9,7 +9,7 @@ addition_info=${2}
 seed=${3}
 gpu_id=${4}
 
-tasks=("metaworld_bin-picking" "coffee-pull" "metaworld_basketball")
+tasks=("metaworld_coffee-push" "metaworld_door-open" "metaworld_dial-turn" "metaworld_hand-insert" "metaworld_lever-pull")
 
 for task_name in "${tasks[@]}"; do
     exp_name="${task_name}-${alg_name}-${addition_info}"

@@ -9,7 +9,7 @@ from termcolor import cprint
 import copy
 import time
 import pytorch3d.ops as torch3d_ops
-
+import numpy as np
 from diffusion_policy_3d.model.common.normalizer import LinearNormalizer
 from diffusion_policy_3d.policy.base_policy import BasePolicy
 from diffusion_policy_3d.model.diffusion.conditional_unet1d import ConditionalUnet1D
@@ -330,25 +330,25 @@ class DP3(BasePolicy):
             **self.kwargs)
         
         # unnormalize prediction
+        # print(nsample.shape)
+        # import pdb;pdb.set_trace()
         naction_pred = nsample[...,:Da]
         action_pred = self.normalizer['action'].unnormalize(naction_pred)
 
         # get action
         start = To - 1
         end = start + self.n_action_steps
-
+        end2 = start + self.n_action_steps+self.n_action_steps
         # Modify here: Take every second action to achieve faster action prediction
-        action = action_pred[:,start:end:] #(chunk_len, num_samples, dim)
+        # action = action_pred[:,start:end:] #(chunk_len, num_samples, dim)
+        action = action_pred[:,start:end:]  # [1,3,4]
+        # print(action_pred.shape)
         # todo:每一个action都进行倍速，举个例子就是action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)
         # 2x:
-        action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)
-        print(action[:,0,:].shape)
-        import pdb;
-        action_speed = action[:,0,:][-1]
-        # 3x:
-        # action_speed = np.clip(action[:,0,:],-1,1)+np.clip(action[:,1,:],-1,1)+np.clip(action[:,2,:],-1,1)
-        # action_speed = action[:,0,:][-1]
-        action = action_speed
+        # action_speed_xyz = torch.clamp(action[:, 0, :3], -1, 1) + torch.clamp(action[:, 1, :3], -1, 1)
+        # gripper_value = action[:, 0, 3].unsqueeze(1)
+        # action_speed = torch.cat((action_speed_xyz.unsqueeze(1), gripper_value.unsqueeze(2)), dim=2)
+        # action = action_speed
 
         result = {
             'action': action,

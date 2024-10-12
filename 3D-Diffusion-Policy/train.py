@@ -101,7 +101,7 @@ class TrainDP3Workspace:
         # configure dataset
         dataset: BaseDataset
         if cfg.training.two_times is True:
-            cfg.task.dataset['zarr_path'] = cfg.task.dataset['zarr_path'].replace('.zarr', '_2xspeeddemo.zarr')
+            cfg.task.dataset['zarr_path'] = cfg.task.dataset['zarr_path'].replace('.zarr', '_method.zarr')
         print(cfg.task.dataset)
         dataset = hydra.utils.instantiate(cfg.task.dataset)
         # print(cfg.task.dataset)
@@ -142,10 +142,14 @@ class TrainDP3Workspace:
                 model=self.ema_model)
 
         # configure env
+        device = torch.device(cfg.training.device)
+        print("device = torch.device(cfg.training.device)",device)
         env_runner: BaseRunner
         env_runner = hydra.utils.instantiate(
             cfg.task.env_runner,
-            output_dir=self.output_dir)
+            output_dir=self.output_dir,
+            )
+        print("env_runner",env_runner)
 
         if env_runner is not None:
             assert isinstance(env_runner, BaseRunner)
@@ -175,6 +179,7 @@ class TrainDP3Workspace:
         # import pdb;pdb.set_trace()
         # device transfer
         device = torch.device(cfg.training.device)
+        print("device:",torch.device(cfg.training.device))
         self.model.to(device)
         if self.ema_model is not None:
             self.ema_model.to(device)
@@ -362,7 +367,7 @@ class TrainDP3Workspace:
         print("_____________________self.output_dir_______________________________________",self.output_dir)
         speedup = True
         if speedup == True:
-            cfg.task.env_runner['_target_'] = 'diffusion_policy_3d.env_runner.metaworld_runner_speedup.MetaworldRunner'
+            cfg.task.env_runner['_target_'] = 'diffusion_policy_3d.env_runner.metaworld_runner.MetaworldRunner'
         
         env_runner = hydra.utils.instantiate(
             cfg.task.env_runner,

@@ -14,7 +14,7 @@ from diffusion_policy_3d.common.pytorch_util import dict_apply
 from diffusion_policy_3d.env_runner.base_runner import BaseRunner
 import diffusion_policy_3d.common.logger_util as logger_util
 from termcolor import cprint
-
+import sys
 class MetaworldRunner(BaseRunner):
     def __init__(self,
                  output_dir,
@@ -120,24 +120,22 @@ class MetaworldRunner(BaseRunner):
                     # print(obs_dict_input.shape)
                     # print(len(obs_dict_input['agent_pos']))
                     obs_array.extend(copy.deepcopy(obs_dict_input))
-                    action_dict = policy.predict_action_fast(obs_dict_input)
+                    # print(obs_dict_input)
+                    # print(obs_dict_input.shape)
+                    # import pdb;pdb.set_trace()
+                    action_dict = policy.predict_action(obs_dict_input)
                     # print(len(action_dict)
                 
                 np_action_dict = dict_apply(action_dict,
                                             lambda x: x.detach().to('cpu').numpy())
                 # np_action_dict = np.array(np_action_dict)
                 # print("np_action_dict",len(np_action_dict))
-                # print(np_action_dict['action'].shape)
                 action = np_action_dict['action'].squeeze(0)
                 # action = self.Uniform_acceleration(action = action,speed = 2)
                 idx+=len(action)
-                # end+=len(action)
-                # print("action",action.shape)
                 action_array.extend(copy.deepcopy(action))
-                # import pdb;pdb.set_trace()
-                # print(f'action{action.shape},action_abs{action_abs.shape}')
-                # print(f'action{action},action_abs{action_abs}')
-                obs, reward, done, info = env.step(action,green_curve = action_abs)
+                obs, reward, done, info = env.step(action)
+                # print(obs)
                 if self.speedup_demo ==True:
                     action_abs = action_abs_array[idx:3+idx,:]
                 # print(info['target_pos'][0])
@@ -152,8 +150,8 @@ class MetaworldRunner(BaseRunner):
             all_success_rates.append(is_success)
             all_traj_rewards.append(traj_reward)
             
-            print(len(info['target_pos'][0]))
-            print(len(action_array))
+            # print(len(info['target_pos'][0]))
+            # print(len(action_array))
             # import pdb;pdb.set_trace()
             if self.eval == True:   
                 self.save_data(save_dir,episode_idx,info['target_pos'][0][start:],action_array,obs_array)
