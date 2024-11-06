@@ -103,6 +103,7 @@ class TrainDP3Workspace:
         if cfg.training.two_times is True:
             cfg.task.dataset['zarr_path'] = cfg.task.dataset['zarr_path'].replace('.zarr', '_method.zarr')
         print(cfg.task.dataset)
+        
         dataset = hydra.utils.instantiate(cfg.task.dataset)
         # print(cfg.task.dataset)
         # print(dataset)
@@ -353,9 +354,9 @@ class TrainDP3Workspace:
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
-        print(seed)
+        # print(seed)
         cfg = copy.deepcopy(self.cfg)
-        print(cfg)
+        # print(cfg)
         
         lastest_ckpt_path = self.get_checkpoint_path(tag="latest")
         if lastest_ckpt_path.is_file():
@@ -364,11 +365,11 @@ class TrainDP3Workspace:
         
         # configure env
         env_runner: BaseRunner
-        print("_____________________self.output_dir_______________________________________",self.output_dir)
+        print("_____________________self.output_dir______________________",self.output_dir)
         speedup = True
         if speedup == True:
             cfg.task.env_runner['_target_'] = 'diffusion_policy_3d.env_runner.metaworld_runner.MetaworldRunner'
-        
+        print(self.output_dir)
         env_runner = hydra.utils.instantiate(
             cfg.task.env_runner,
             output_dir=self.output_dir)
@@ -381,7 +382,16 @@ class TrainDP3Workspace:
         policy.cuda()
 
         runner_log = env_runner.run(policy)
-        
+        # dump log to json
+        json_log = dict()
+        for key, value in runner_log.items():
+            if isinstance(value, wandb.sdk.data_types.video.Video):
+                json_log[key] = value._path
+            else:
+                json_log[key] = value
+        out_path = os.path.join(self.output_dir, 'eval_log.json')
+        json.dump(json_log, open(out_path, 'w'), indent=2, sort_keys=True)
+            
       
         cprint(f"---------------- Eval Results --------------", 'magenta')
         for key, value in runner_log.items():
@@ -439,6 +449,8 @@ class TrainDP3Workspace:
     
     def get_checkpoint_path(self, tag='latest'):
         if tag=='latest':
+            # print("self.output_dir--------",self.output_dir)
+            # self.output_dir = 
             return pathlib.Path(self.output_dir).joinpath('checkpoints', f'{tag}.ckpt')
         elif tag=='best': 
             # the checkpoints are saved as format: epoch={}-test_mean_score={}.ckpt

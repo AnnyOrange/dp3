@@ -18,6 +18,7 @@ from diffusion_policy_3d.common.pytorch_util import dict_apply
 from diffusion_policy_3d.env_runner.base_runner import BaseRunner
 import diffusion_policy_3d.common.logger_util as logger_util
 from termcolor import cprint
+import json
 
 class MetaworldRunner(BaseRunner):
     def __init__(self,
@@ -64,6 +65,7 @@ class MetaworldRunner(BaseRunner):
 
         self.logger_util_test = logger_util.LargestKRecorder(K=3)
         self.logger_util_test10 = logger_util.LargestKRecorder(K=5)
+        self.output_dir = output_dir
 
     def run(self, policy: BasePolicy, save_video=False):
         device = policy.device
@@ -73,10 +75,22 @@ class MetaworldRunner(BaseRunner):
         all_success_rates = []
         env = self.env
         # print(self.n_action_steps)
-
+         
+        # t = np.zeros(n_envs)
         
         for episode_idx in tqdm.tqdm(range(self.eval_episodes), desc=f"Eval in Metaworld {self.task_name} Pointcloud Env", leave=False, mininterval=self.tqdm_interval_sec):
-            
+            t = 0
+            n_envs = 1
+            state_dim = 4
+            self.temporal_agg = True
+            num_samples = 10
+            if self.temporal_agg:
+                    all_time_actions = torch.zeros(
+                        [self.n_action_steps, self.n_action_steps-1, n_envs, state_dim]
+                    ).to(device)   
+                    all_time_samples = torch.zeros(
+                        [self.n_action_steps, self.n_action_steps-1, n_envs, num_samples, state_dim]
+                    ).to(device) 
             # start rollout
             obs = env.reset()
             policy.reset()
@@ -84,6 +98,8 @@ class MetaworldRunner(BaseRunner):
             done = False
             traj_reward = 0
             is_success = False
+            num_samples = 10
+            
             while not done:
                 np_obs_dict = dict(obs)
                 obs_dict = dict_apply(np_obs_dict,
@@ -94,12 +110,96 @@ class MetaworldRunner(BaseRunner):
                     obs_dict_input = {}
                     obs_dict_input['point_cloud'] = obs_dict['point_cloud'].unsqueeze(0)
                     obs_dict_input['agent_pos'] = obs_dict['agent_pos'].unsqueeze(0)
-                    action_dict = policy.predict_action_fast(obs_dict_input)
+                    action_dict = policy.predict_action(obs_dict_input)
+                    # import pdb;pdb.set_trace()
+                    sample_dict = policy.get_samples(obs_dict_input, num_samples=num_samples)
+                    
                 
                 np_action_dict = dict_apply(action_dict,
                                             lambda x: x.detach().to('cpu').numpy())
+                np_sample_dict = dict_apply(sample_dict,
+                                            lambda x: x.detach().to('cpu').numpy())
+                # print(np_action_dict['action'].shape)
                 action = np_action_dict['action'].squeeze(0)
-                # print("action",action.shape)
+                # print("sq",np_action_dict['action'].shape)
+                
+                sample = np_sample_dict['action']
+                sample = sample.reshape(num_samples,sample.shape[0]//num_samples,sample.shape[1],sample.shape[2])
+                # print("sample",sample.shape) # (10, 1, 3, 4)
+                # print("action",action.shape) # (1,3,4)
+                env_action = np_action_dict['action']
+                # all_time_actions_i = all_time_actions[:,:,episode_idx,:].unsqueeze(2)
+                # all_time_samples_i = all_time_samples[:,:,i,:,:].unsqueeze(2)
+                # import pdb;pdb.set_trace()
+                if self.temporal_agg:
+                    all_actions = torch.from_numpy(env_action).float().to(device)
+                    all_samples = torch.from_numpy(sample).float().to(device)
+                    all_samples = all_samples.permute(2,1,0,3)  # (16,28,10,7) #(3,1,10,4)
+                    # all_actions扩维度 最开始增加维度
+                    all_actions = all_actions.permute(1,0,2) # (16,28,7) #(3,1,4)
+                    # print(all_actions.shape)
+                    all_time_actions[[-1], :self.n_action_steps-1] = all_actions  
+                    # print(all_time_actions.shape) #(4,3,20,4)
+                    actions_for_curr_step = all_time_actions[:, 0]  
+                    
+                    actions_populated = torch.all(actions_for_curr_step[:,:,0] != 0, axis=-1)  
+                    all_time_samples[[-1],  :self.n_action_steps-1] = all_samples 
+                    samples_for_curr_step = all_time_samples[:, 0]  
+                    
+                    actions_for_curr_step = actions_for_curr_step[actions_populated]
+                    samples_for_curr_step = samples_for_curr_step[actions_populated]
+                    # print(samples_for_curr_step.shape) # (1,1,10,4)  1 10 20 4     10 20 3 4 1  10 20 1 4
+                    # import pdb;pdb.set_trace()
+                      
+                    entropy = torch.mean(torch.var(samples_for_curr_step.permute(0,2,1,3).flatten(0,1),dim=0,keepdim=True),dim=-1,keepdim=True)
+                    entropy = entropy.permute(1,0,2).detach().cpu().numpy()
+
+                    k = 0.01
+                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                    exp_weights = exp_weights / exp_weights.sum()
+                    exp_weights = (
+                            torch.from_numpy(exp_weights).to(device).unsqueeze(dim=1).unsqueeze(dim=-1)
+                    )
+                    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True).permute(1,0,2)
+                    action = raw_action.detach().cpu().numpy()
+
+                    # move temporal ensemble window
+                    all_time_actions_temp = torch.zeros_like(all_time_actions)
+                    all_time_actions_temp[:-1,:-1] = all_time_actions[1:,1:]
+                    all_time_actions = all_time_actions_temp
+                    del all_time_actions_temp
+                    all_time_samples_temp = torch.zeros_like(all_time_samples)
+                    all_time_samples_temp[:-1,:-1] = all_time_samples[1:,1:]
+                    all_time_samples = all_time_samples_temp
+                    del all_time_samples_temp
+                    
+                    t+=1
+                else:
+                    sample = np.expand_dims(sample[:,:,0,:], axis=2).transpose(1, 0, 2, 3)
+                    # print(sample.shape)
+                    entropy = torch.mean(
+                        torch.var(
+                            torch.from_numpy(sample).float().to(device).flatten(0, 1),
+                            dim=0,
+                            keepdim=True
+                        ),
+                        dim=-1,
+                        keepdim=True
+                    ).detach().cpu().numpy()
+                    if action.ndim == 2 and action.shape[0]!=1:
+                        action = np.expand_dims(action[0,:],axis=0)
+                        # print(action.shape)
+                    # print(entropy.shape)
+                    # entropy.reshape(action.shape)
+                
+                if action.ndim == 3:
+                    action = action.squeeze(0)
+                if entropy.ndim == 3:
+                    entropy = entropy.squeeze(0)
+                # print(action.shape)
+                # print(entropy.shape)
+                # import pdb;pdb.set_trace()
+                action = np.concatenate((action, entropy),axis=-1)
                 obs, reward, done, info = env.step(action)
 
 

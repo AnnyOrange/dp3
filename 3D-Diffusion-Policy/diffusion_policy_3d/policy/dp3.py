@@ -199,6 +199,7 @@ class DP3(BasePolicy):
         """
         # normalize input
         nobs = self.normalizer.normalize(obs_dict)
+        # print("obs_dict",obs_dict)
         # this_n_point_cloud = nobs['imagin_robot'][..., :3] # only use coordinate
         if not self.use_pc_color:
             nobs['point_cloud'] = nobs['point_cloud'][..., :3]
@@ -206,6 +207,7 @@ class DP3(BasePolicy):
         
         
         value = next(iter(nobs.values()))
+        # print("values.",value.shape) # [1,2,512,3]
         B, To = value.shape[:2]
         T = self.horizon
         Da = self.action_dim
@@ -223,6 +225,90 @@ class DP3(BasePolicy):
             # condition through global feature
             this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
             nobs_features = self.obs_encoder(this_nobs)
+            if "cross_attention" in self.condition_type:
+                # treat as a sequence
+                global_cond = nobs_features.reshape(B, self.n_obs_steps, -1)
+            else:
+                # reshape back to B, Do
+                global_cond = nobs_features.reshape(B, -1)
+            # empty data for action
+            cond_data = torch.zeros(size=(B, T, Da), device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        else:
+            # condition through impainting
+            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            nobs_features = self.obs_encoder(this_nobs)
+            # reshape back to B, T, Do
+            nobs_features = nobs_features.reshape(B, To, -1)
+            cond_data = torch.zeros(size=(B, T, Da+Do), device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs_features
+            cond_mask[:,:To,Da:] = True
+
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        # print("nsample.shape",nsample.shape)
+        
+        # unnormalize prediction
+        naction_pred = nsample[...,:Da]
+        # print("Da",Da)
+        action_pred = self.normalizer['action'].unnormalize(naction_pred)
+
+        # get action
+        start = To - 1
+        end = start + self.n_action_steps
+        action = action_pred[:,start:end]
+        # print(action.shape)
+        # get prediction
+
+
+        result = {
+            'action': action,
+            'action_pred': action_pred,
+        }
+        
+        return result
+    def get_samples(self, obs_dict: Dict[str, torch.Tensor], num_samples:int) -> Dict[str, torch.Tensor]:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        # normalize input
+        nobs = self.normalizer.normalize(obs_dict)
+        # this_n_point_cloud = nobs['imagin_robot'][..., :3] # only use coordinate
+        if not self.use_pc_color:
+            nobs['point_cloud'] = nobs['point_cloud'][..., :3]
+        this_n_point_cloud = nobs['point_cloud']
+        for key, tensor in nobs.items():
+            # print(f"{key}: {tensor.shape}")
+            nobs[key] = torch.tile(tensor, (num_samples, 1, 1)) if tensor.dim() == 3 else torch.tile(tensor, (num_samples, 1,1,1))
+        value = next(iter(nobs.values()))
+        # value = torch.tile(value, (num_samples,1,1,1))
+        B, To = value.shape[:2]
+        T = self.horizon
+        Da = self.action_dim
+        Do = self.obs_feature_dim # 128
+        To = self.n_obs_steps
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_global_cond:
+            # condition through global feature
+            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            # for key, tensor in this_nobs.items():
+            #     print(f"{key}: {tensor.shape}")
+            nobs_features = self.obs_encoder(this_nobs)
+            # print(nobs_features.shape) # [2,128]->[20,128]
             if "cross_attention" in self.condition_type:
                 # treat as a sequence
                 global_cond = nobs_features.reshape(B, self.n_obs_steps, -1)

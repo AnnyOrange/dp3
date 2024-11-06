@@ -1,6 +1,7 @@
 import sys
 sys.path.append('/home/xzj/project/origin-dp3/3D-Diffusion-Policy/third_party/gym-0.21.0')
 import gym
+import cv2
 import numpy as np
 from termcolor import cprint
 
@@ -33,6 +34,8 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         return obs
     
     def step(self, action,green_act = None):
+        entropy = action[-1]
+        action = action[:-1]
         if green_act is None:
             result = super().step(action)
         else:
@@ -43,6 +46,7 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         self.step_count += 1
         
         frame = self.env.render(mode=self.mode)
+        frame = put_text(frame,  f"{entropy:.2e}")
         assert frame.dtype == np.uint8
         self.frames.append(frame)
         
@@ -53,4 +57,32 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         # to store as mp4 in wandb, we need (T, H, W, C) -> (T, C, H, W)
         video = video.transpose(0, 3, 1, 2)
         return video
-
+def put_text(img, text, is_waypoint=False, font_size=0.8, thickness=1, position="top"):
+    img = img.copy()
+    if position == "top":
+        p = (10, 30)
+    elif position == "bottom":
+        p = (10, img.shape[0] - 60)
+    # put the frame number in the top left corner
+    img = cv2.putText(
+        img,
+        str(text),
+        p,
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_size,
+        (0, 255, 255),
+        thickness,
+        cv2.LINE_AA,
+    )
+    if is_waypoint:
+        img = cv2.putText(
+            img,
+            "*",
+            (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_size,
+            (255, 255, 0),
+            thickness,
+            cv2.LINE_AA,
+        )
+    return img

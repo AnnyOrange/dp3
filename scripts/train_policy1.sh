@@ -2,18 +2,18 @@
 
 DEBUG=False
 save_ckpt=True
-two_times=True  # Renamed variable
+two_times=False  # Renamed variable
 
 alg_name=${1}
 addition_info=${2}
 seed=${3}
 gpu_id=${4}
-
-tasks=("metaworld_coffee-push" "metaworld_door-open" "metaworld_dial-turn" "metaworld_hand-insert" "metaworld_lever-pull")
+# "metaworld_stick-push"  "metaworld_shelf-place"
+tasks=("metaworld_pick-out-of-hole" "metaworld_peg-unplug-side" "metaworld_sweep")
 
 for task_name in "${tasks[@]}"; do
     exp_name="${task_name}-${alg_name}-${addition_info}"
-    run_dir="data/outputs/${exp_name}_seed${seed}_2x"
+    run_dir="data/outputs/${exp_name}_seed${seed}"
 
     echo -e "\033[33mRunning task: ${task_name} with alg: ${alg_name} and seed: ${seed}\033[0m"
     echo -e "\033[33mgpu id (to use): ${gpu_id}\033[0m"

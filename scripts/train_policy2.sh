@@ -1,19 +1,19 @@
 #!/bin/bash
-
+# bash scripts/train_policy.sh dp3 0122 0 4
 DEBUG=False
 save_ckpt=True
-two_times=True  # Renamed variable
+two_times=False  # Renamed variable
 
 alg_name=${1}
 addition_info=${2}
 seed=${3}
 gpu_id=${4}
-
-tasks=("metaworld_pick-place-wall" "metaworld_push" "metaworld_soccer" "metaworld_sweep-into" "metaworld_stick-pull")
+# "metaworld_soccer"  "metaworld_handle-pull-side" 
+tasks=("metaworld_push")
 
 for task_name in "${tasks[@]}"; do
     exp_name="${task_name}-${alg_name}-${addition_info}"
-    run_dir="data/outputs/${exp_name}_seed${seed}_2x"
+    run_dir="data/outputs/${exp_name}_seed${seed}"
 
     echo -e "\033[33mRunning task: ${task_name} with alg: ${alg_name} and seed: ${seed}\033[0m"
     echo -e "\033[33mgpu id (to use): ${gpu_id}\033[0m"
