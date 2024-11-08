@@ -57,7 +57,7 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         # to store as mp4 in wandb, we need (T, H, W, C) -> (T, C, H, W)
         video = video.transpose(0, 3, 1, 2)
         return video
-def put_text(img, text, is_waypoint=False, font_size=0.8, thickness=1, position="top"):
+def put_text(img, text, is_waypoint=False, font_size=0.5, thickness=1, position="top"):
     img = img.copy()
     if position == "top":
         p = (10, 30)

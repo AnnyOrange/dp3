@@ -1,9 +1,5 @@
 import sys
 import os
-
-# 将项目路径添加到 sys.path
-project_path = "/home/xzj/project/origin-dp3/3D-Diffusion-Policy/3D-Diffusion-Policy"
-sys.path.append(project_path)
 import wandb
 import numpy as np
 import torch
@@ -19,7 +15,7 @@ from diffusion_policy_3d.env_runner.base_runner import BaseRunner
 import diffusion_policy_3d.common.logger_util as logger_util
 from termcolor import cprint
 import json
-
+import imageio
 class MetaworldRunner(BaseRunner):
     def __init__(self,
                  output_dir,
@@ -53,7 +49,8 @@ class MetaworldRunner(BaseRunner):
                 max_episode_steps=max_steps,
                 reward_agg_method='sum',
             )
-        self.eval_episodes = eval_episodes
+        # self.eval_episodes = eval_episodes
+        self.eval_episodes = 5
         self.env = env_fn(self.task_name)
 
         self.fps = fps
@@ -89,7 +86,7 @@ class MetaworldRunner(BaseRunner):
                         [self.n_action_steps, self.n_action_steps-1, n_envs, state_dim]
                     ).to(device)   
                     all_time_samples = torch.zeros(
-                        [self.n_action_steps, self.n_action_steps-1, n_envs, num_samples, state_dim]
+                        [self.n_action_steps, self.n_action_steps-1, n_envs, num_samples, state_dim-1]
                     ).to(device) 
             # start rollout
             obs = env.reset()
@@ -143,7 +140,7 @@ class MetaworldRunner(BaseRunner):
                     actions_for_curr_step = all_time_actions[:, 0]  
                     
                     actions_populated = torch.all(actions_for_curr_step[:,:,0] != 0, axis=-1)  
-                    all_time_samples[[-1],  :self.n_action_steps-1] = all_samples 
+                    all_time_samples[[-1],  :self.n_action_steps-1] = all_samples[:,:,:,:3] 
                     samples_for_curr_step = all_time_samples[:, 0]  
                     
                     actions_for_curr_step = actions_for_curr_step[actions_populated]
@@ -199,6 +196,7 @@ class MetaworldRunner(BaseRunner):
                 # print(action.shape)
                 # print(entropy.shape)
                 # import pdb;pdb.set_trace()
+           
                 action = np.concatenate((action, entropy),axis=-1)
                 obs, reward, done, info = env.step(action)
 
@@ -228,6 +226,9 @@ class MetaworldRunner(BaseRunner):
         
 
         videos = env.env.get_video()
+        video_path = os.path.join(self.output_dir, 'eval_videos', f'episode_xyz_{episode_idx}.mp4')  # 保存路径
+        os.makedirs(os.path.dirname(video_path), exist_ok=True)  
+        self.save_video_to_file(videos, save_path = video_path, fps = self.fps)
         if len(videos.shape) == 5:
             videos = videos[:, 0]  # select first frame
         
@@ -239,3 +240,11 @@ class MetaworldRunner(BaseRunner):
         videos = None
 
         return log_data
+    def save_video_to_file(self,videos, save_path, fps=10):
+        if len(videos.shape) == 5:
+            videos = videos[:, 0]  # 如果 shape 是 5 维，去掉 batch 维度
+        # print(videos.shape)
+        videos = np.transpose(videos, (0, 2, 3, 1)) 
+        with imageio.get_writer(save_path, fps=fps) as video_writer:
+            for frame in videos:
+                video_writer.append_data(frame)

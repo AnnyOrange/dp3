@@ -10,8 +10,8 @@ addition_info=${2}
 seed=${3}
 gpu_id=${4}
 
-# 定义你要执行评估的任务列表 "metaworld_soccer" "metaworld_shelf-place" "metaworld_sweep-into"
-tasks=("metaworld_stick-push")
+# 定义你要执行评估的任务列表 "metaworld_soccer" "metaworld_shelf-place" "metaworld_sweep-into" metaworld_stick-push 
+tasks=("metaworld_pick-out-of-hole" "metaworld_push" "metaworld_shelf-place" "metaworld_soccer" "metaworld_stick-push" "metaworld_sweep-into")
 
 # 循环遍历每一个任务并执行评估
 for task_name in "${tasks[@]}"; do
