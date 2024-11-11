@@ -112,6 +112,7 @@ class MultiStepWrapper(gym.Wrapper):
             reward_agg_method='max'
         ):
         super().__init__(env)
+        self.statelist = env.statelist
         self._action_space = repeated_space(env.action_space, n_action_steps)
         self._observation_space = repeated_space(env.observation_space, n_obs_steps)
         self.max_episode_steps = max_episode_steps
@@ -141,8 +142,9 @@ class MultiStepWrapper(gym.Wrapper):
         """
         actions: (n_action_steps,) + action_shape
         """
-        # print("len(action)",len(action))
+        
         idx = 0
+        
         for act in action:
             if green_curve is not None:
                 green_act = green_curve[idx]
@@ -152,7 +154,17 @@ class MultiStepWrapper(gym.Wrapper):
                 # termination
                 break
             observation, reward, done, info = super().step(act,green_act)
-
+            # print(info['success'])
+            
+            if len(self.done) > 0 and self.done[-1]:
+                # termination
+                break
+            # print(self.reward)
+            if len(self.reward) > 0 and (info['success']>0):
+                done = True
+                self.done.append(done)
+                break
+            # import pdb;pdb.set_trace()
             self.obs.append(observation)
             self.reward.append(reward)
             if (self.max_episode_steps is not None) \

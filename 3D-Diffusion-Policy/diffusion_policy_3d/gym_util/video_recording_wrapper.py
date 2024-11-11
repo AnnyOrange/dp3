@@ -19,7 +19,7 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         
         self.mode = mode
         self.steps_per_render = steps_per_render
-
+        self.statelist = []
         self.step_count = 0
 
     def reset(self, **kwargs):
@@ -44,12 +44,18 @@ class SimpleVideoRecordingWrapper(gym.Wrapper):
         # print(action.shape)
         
         self.step_count += 1
-        
+        # print(result)
+        agent = result[0]['full_state'][:4]
+        # print(action)/
+        state_data = [{
+                "action": action,
+                "pos_agent": agent
+            }]
         frame = self.env.render(mode=self.mode)
         frame = put_text(frame,  f"{entropy:.2e}")
         assert frame.dtype == np.uint8
         self.frames.append(frame)
-        
+        self.statelist.append(state_data)
         return result
     
     def get_video(self):

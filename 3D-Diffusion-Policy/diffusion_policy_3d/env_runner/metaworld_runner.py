@@ -50,7 +50,7 @@ class MetaworldRunner(BaseRunner):
                 reward_agg_method='sum',
             )
         # self.eval_episodes = eval_episodes
-        self.eval_episodes = 5
+        self.eval_episodes = eval_episodes
         self.env = env_fn(self.task_name)
 
         self.fps = fps
@@ -79,7 +79,7 @@ class MetaworldRunner(BaseRunner):
             t = 0
             n_envs = 1
             state_dim = 4
-            self.temporal_agg = True
+            self.temporal_agg = False
             num_samples = 10
             if self.temporal_agg:
                     all_time_actions = torch.zeros(
@@ -96,7 +96,7 @@ class MetaworldRunner(BaseRunner):
             traj_reward = 0
             is_success = False
             num_samples = 10
-            
+            step = 0
             while not done:
                 np_obs_dict = dict(obs)
                 obs_dict = dict_apply(np_obs_dict,
@@ -118,7 +118,6 @@ class MetaworldRunner(BaseRunner):
                                             lambda x: x.detach().to('cpu').numpy())
                 # print(np_action_dict['action'].shape)
                 action = np_action_dict['action'].squeeze(0)
-                # print("sq",np_action_dict['action'].shape)
                 
                 sample = np_sample_dict['action']
                 sample = sample.reshape(num_samples,sample.shape[0]//num_samples,sample.shape[1],sample.shape[2])
@@ -128,52 +127,71 @@ class MetaworldRunner(BaseRunner):
                 # all_time_actions_i = all_time_actions[:,:,episode_idx,:].unsqueeze(2)
                 # all_time_samples_i = all_time_samples[:,:,i,:,:].unsqueeze(2)
                 # import pdb;pdb.set_trace()
-                if self.temporal_agg:
-                    all_actions = torch.from_numpy(env_action).float().to(device)
-                    all_samples = torch.from_numpy(sample).float().to(device)
-                    all_samples = all_samples.permute(2,1,0,3)  # (16,28,10,7) #(3,1,10,4)
-                    # all_actions扩维度 最开始增加维度
-                    all_actions = all_actions.permute(1,0,2) # (16,28,7) #(3,1,4)
-                    # print(all_actions.shape)
-                    all_time_actions[[-1], :self.n_action_steps-1] = all_actions  
-                    # print(all_time_actions.shape) #(4,3,20,4)
-                    actions_for_curr_step = all_time_actions[:, 0]  
-                    
-                    actions_populated = torch.all(actions_for_curr_step[:,:,0] != 0, axis=-1)  
-                    all_time_samples[[-1],  :self.n_action_steps-1] = all_samples[:,:,:,:3] 
-                    samples_for_curr_step = all_time_samples[:, 0]  
-                    
-                    actions_for_curr_step = actions_for_curr_step[actions_populated]
-                    samples_for_curr_step = samples_for_curr_step[actions_populated]
-                    # print(samples_for_curr_step.shape) # (1,1,10,4)  1 10 20 4     10 20 3 4 1  10 20 1 4
-                    # import pdb;pdb.set_trace()
-                      
-                    entropy = torch.mean(torch.var(samples_for_curr_step.permute(0,2,1,3).flatten(0,1),dim=0,keepdim=True),dim=-1,keepdim=True)
-                    entropy = entropy.permute(1,0,2).detach().cpu().numpy()
+                closeloop = False
+                if closeloop:
+                    if self.temporal_agg:
+                        all_actions = torch.from_numpy(env_action).float().to(device)
+                        all_samples = torch.from_numpy(sample).float().to(device)
+                        all_samples = all_samples.permute(2,1,0,3)  # (16,28,10,7) #(3,1,10,4)
+                        # all_actions扩维度 最开始增加维度
+                        all_actions = all_actions.permute(1,0,2) # (16,28,7) #(3,1,4)
+                        # print(all_actions.shape)
+                        all_time_actions[[-1], :self.n_action_steps-1] = all_actions  
+                        # print(all_time_actions.shape) #(4,3,20,4)
+                        actions_for_curr_step = all_time_actions[:, 0]  
+                        
+                        actions_populated = torch.all(actions_for_curr_step[:,:,0] != 0, axis=-1)  
+                        all_time_samples[[-1],  :self.n_action_steps-1] = all_samples[:,:,:,:3] 
+                        samples_for_curr_step = all_time_samples[:, 0]  
+                        
+                        actions_for_curr_step = actions_for_curr_step[actions_populated]
+                        samples_for_curr_step = samples_for_curr_step[actions_populated]
+                        # print(samples_for_curr_step.shape) # (1,1,10,4)  1 10 20 4     10 20 3 4 1  10 20 1 4
+                        # import pdb;pdb.set_trace()
+                        
+                        entropy = torch.mean(torch.var(samples_for_curr_step.permute(0,2,1,3).flatten(0,1),dim=0,keepdim=True),dim=-1,keepdim=True)
+                        entropy = entropy.permute(1,0,2).detach().cpu().numpy()
 
-                    k = 0.01
-                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
-                    exp_weights = exp_weights / exp_weights.sum()
-                    exp_weights = (
-                            torch.from_numpy(exp_weights).to(device).unsqueeze(dim=1).unsqueeze(dim=-1)
-                    )
-                    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True).permute(1,0,2)
-                    action = raw_action.detach().cpu().numpy()
+                        k = 0.01
+                        exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                        exp_weights = exp_weights / exp_weights.sum()
+                        exp_weights = (
+                                torch.from_numpy(exp_weights).to(device).unsqueeze(dim=1).unsqueeze(dim=-1)
+                        )
+                        raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True).permute(1,0,2)
+                        action = raw_action.detach().cpu().numpy()
 
-                    # move temporal ensemble window
-                    all_time_actions_temp = torch.zeros_like(all_time_actions)
-                    all_time_actions_temp[:-1,:-1] = all_time_actions[1:,1:]
-                    all_time_actions = all_time_actions_temp
-                    del all_time_actions_temp
-                    all_time_samples_temp = torch.zeros_like(all_time_samples)
-                    all_time_samples_temp[:-1,:-1] = all_time_samples[1:,1:]
-                    all_time_samples = all_time_samples_temp
-                    del all_time_samples_temp
-                    
-                    t+=1
+                        # move temporal ensemble window
+                        all_time_actions_temp = torch.zeros_like(all_time_actions)
+                        all_time_actions_temp[:-1,:-1] = all_time_actions[1:,1:]
+                        all_time_actions = all_time_actions_temp
+                        del all_time_actions_temp
+                        all_time_samples_temp = torch.zeros_like(all_time_samples)
+                        all_time_samples_temp[:-1,:-1] = all_time_samples[1:,1:]
+                        all_time_samples = all_time_samples_temp
+                        del all_time_samples_temp
+                        
+                        t+=1
+                    else:
+                        sample = np.expand_dims(sample[:,:,0,:], axis=2).transpose(1, 0, 2, 3)
+                        # print(sample.shape)
+                        entropy = torch.mean(
+                            torch.var(
+                                torch.from_numpy(sample).float().to(device).flatten(0, 1),
+                                dim=0,
+                                keepdim=True
+                            ),
+                            dim=-1,
+                            keepdim=True
+                        ).detach().cpu().numpy()
+                        if action.ndim == 2 and action.shape[0]!=1:
+                            action = np.expand_dims(action[0,:],axis=0)
+                            # print(action.shape)
+                        # print(entropy.shape)
+                        # entropy.reshape(action.shape)
                 else:
                     sample = np.expand_dims(sample[:,:,0,:], axis=2).transpose(1, 0, 2, 3)
-                    # print(sample.shape)
+                        # print(sample.shape)
                     entropy = torch.mean(
                         torch.var(
                             torch.from_numpy(sample).float().to(device).flatten(0, 1),
@@ -183,32 +201,29 @@ class MetaworldRunner(BaseRunner):
                         dim=-1,
                         keepdim=True
                     ).detach().cpu().numpy()
-                    if action.ndim == 2 and action.shape[0]!=1:
-                        action = np.expand_dims(action[0,:],axis=0)
-                        # print(action.shape)
-                    # print(entropy.shape)
-                    # entropy.reshape(action.shape)
-                
+                    entropy = np.tile(entropy, (action.shape[0], 1))
                 if action.ndim == 3:
                     action = action.squeeze(0)
                 if entropy.ndim == 3:
                     entropy = entropy.squeeze(0)
-                # print(action.shape)
-                # print(entropy.shape)
-                # import pdb;pdb.set_trace()
            
                 action = np.concatenate((action, entropy),axis=-1)
+                # print(action.shape)
+                # import pdb;pdb.set_trace()
+                # action = action[2,:]
                 obs, reward, done, info = env.step(action)
-
-
+                
                 traj_reward += reward
                 done = np.all(done)
+                step += int(not done)
                 is_success = is_success or max(info['success'])
-
+            # print("step",step)
+            # print(len(env.statelist))
             all_success_rates.append(is_success)
             all_traj_rewards.append(traj_reward)
             
-
+        avg_steps = len(env.statelist)/self.eval_episodes
+        
         max_rewards = collections.defaultdict(list)
         log_data = dict()
 

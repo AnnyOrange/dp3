@@ -1,6 +1,6 @@
 # use the same command as training except the script
 # for example:
-# bash scripts/eval_policy.sh dp3 adroit_hammer 0322 0 0
+# bash scripts/eval_policy.sh dp3 0112 0 0
 
 #!/bin/bash
 
@@ -9,9 +9,9 @@ alg_name=${1}
 addition_info=${2}
 seed=${3}
 gpu_id=${4}
-
+# "metaworld_pick-out-of-hole"  "metaworld_shelf-place" "metaworld_soccer" "metaworld_stick-push" "metaworld_sweep-into"
 # 定义你要执行评估的任务列表 "metaworld_soccer" "metaworld_shelf-place" "metaworld_sweep-into" metaworld_stick-push 
-tasks=("metaworld_pick-out-of-hole" "metaworld_push" "metaworld_shelf-place" "metaworld_soccer" "metaworld_stick-push" "metaworld_sweep-into")
+tasks=("metaworld_push")
 
 # 循环遍历每一个任务并执行评估
 for task_name in "${tasks[@]}"; do
