@@ -206,11 +206,12 @@ class MetaworldRunner(BaseRunner):
                     action = action.squeeze(0)
                 if entropy.ndim == 3:
                     entropy = entropy.squeeze(0)
-           
+                
                 action = np.concatenate((action, entropy),axis=-1)
                 # print(action.shape)
                 # import pdb;pdb.set_trace()
-                # action = action[2,:]
+                action = action[2, :][np.newaxis, :]
+
                 obs, reward, done, info = env.step(action)
                 
                 traj_reward += reward
